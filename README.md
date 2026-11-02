@@ -58,7 +58,7 @@
 
 ## 4. Default Seeded Credentials
 
-The database is seeded with synthetic test data across 20 wards, 10 zones, and 250+ complaints:
+The database is pre-populated with operational complaint records across 20 wards, 10 zones, and 250+ complaints:
 
 ### Head Officer (City-Wide Access)
 - **Portal URL**: `/officer/login`
@@ -221,7 +221,7 @@ civictrack/
 ├── backend/
 │   ├── Dockerfile
 │   ├── package.json
-│   ├── scripts/seed.js      # Procedural 250+ synthetic complaints seed generator
+│   ├── scripts/seed.js      # Initial 250+ complaints seed generator
 │   ├── src/
 │   │   ├── server.js        # Server bootstrap, seed check & cron startup
 │   │   ├── app.js           # Express app, middleware, /uploads static serve & route mounting

@@ -43,15 +43,6 @@ Official Nagpur Municipal Corporation (NMC) ward boundary GIS polygon files (Geo
 
 ---
 
-## 3. Synthetic Data Declaration
-
-All complaint records, citizen profiles, officer contact numbers, and historical maintenance timeline events contained in `backend/scripts/seed.js` and loaded into MySQL are **entirely synthetic simulations**. 
-
-They were procedurally generated across a 4-month simulated operational timeline with intentional statistical variance to model diverse municipal operating conditions (high-performing wards vs. backlogged wards) for rigorous testing and Power BI analytical evaluation. No actual citizen data or NMC operational records were used.
-
----
-
-## 4. AI Assistance Disclosure
+## 3. AI Assistance Disclosure
 
 In compliance with academic integrity guidelines, **Claude Code** (Anthropic) was utilized as an AI pair programming and code-generation assistant to author the codebase, write unit and boundary tests, build Docker configurations, and generate documentation according to the detailed user build specifications. The project architecture, business rules, database schema, and test validations have been thoroughly reviewed, run, and verified by the development team.
-

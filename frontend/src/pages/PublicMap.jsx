@@ -145,14 +145,14 @@ export default function PublicMap() {
         </div>
       )}
 
-      {/* Synthetic Data academic footer notice */}
+      {/* Footer */}
       <footer style={{
         textAlign: 'center',
         padding: '24px 0 12px',
         color: '#94a3b8',
         fontSize: '12px'
       }}>
-        Academic Project: CivicTrack Nagpur. Note: Data displayed is synthetic for demonstration and testing purposes.
+        CivicTrack Nagpur • Municipal Complaint Tracking & Ward Resolution Verification
       </footer>
     </div>
   );

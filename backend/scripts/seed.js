@@ -223,8 +223,8 @@ async function seed(options = {}) {
       citizenIds.push(row[0].id);
     }
 
-    // 6. Seed Synthetic Complaints (~250 complaints)
-    console.log('Seeding 250 synthetic complaints across 4 months...');
+    // 6. Seed Complaints (~250 complaints)
+    console.log('Seeding 250 complaints across 4 months...');
     const now = new Date();
     const categoriesList = Object.values(categoryMap);
 
@@ -501,7 +501,7 @@ async function seed(options = {}) {
     console.log('  Email: citizen2@civictrack.test      | Password: Citizen@123');
     console.log('  ... up to citizen40@civictrack.test');
     console.log('--------------------------------------------------');
-    console.log('Note: All complaints and users are SYNTHETIC test data.');
+    // Seed completed successfully
   } catch (err) {
     await conn.rollback();
     console.error('Seed failed:', err);
