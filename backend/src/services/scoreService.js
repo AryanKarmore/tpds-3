@@ -103,3 +103,4 @@ async function getWardScores(wardId = null) {
 module.exports = {
   getWardScores
 };
+

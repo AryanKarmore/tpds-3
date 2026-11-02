@@ -22,3 +22,4 @@ router.get('/complaints', authenticate, requireRole('officer'), async (req, res,
 });
 
 module.exports = router;
+

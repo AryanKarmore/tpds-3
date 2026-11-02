@@ -21,3 +21,4 @@ export const STATUS_LABELS = {
   'Closed': 'Closed & Verified',
   'Reopened': 'Reopened by Citizen'
 };
+

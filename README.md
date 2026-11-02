@@ -31,6 +31,15 @@
    - Municipal wards are objectively scored and ranked:
      $$\text{Score} = 100 - \left(30 \times \frac{\min(\text{avg\_time}, 14)}{14}\right) - (30 \times \text{overdue\_share}) - (40 \times \text{reopen\_rate})$$
    - Wards with zero complaints return `null` (*"No data"*), preventing false 100% scores.
+5. **Photo Evidence & Verification Pipeline**:
+   - Citizens can upload up to 3 optional 'before' photos when filing a complaint.
+   - All uploaded photos undergo binary file signature validation (magic bytes for JPG, PNG, WebP) and automatic EXIF metadata stripping via `sharp` for citizen privacy and security.
+   - Officers are **strictly required** to attach exactly 1 'after' photo when transitioning a complaint to `Pending Confirmation`.
+   - During resolution verification, the citizen is presented with a side-by-side Before/After comparison to inspect the physical proof before confirming or rejecting.
+6. **Threaded Complaint Updates & Internal Officer Notes**:
+   - Both citizens and ward officers can post real-time updates (1-500 chars) on open complaints.
+   - Officers can mark updates as **Internal notes** (for inter-departmental communication), which are strictly hidden from citizen view.
+   - Updates are permanently locked once a complaint is `Closed`.
 
 ---
 
@@ -39,11 +48,11 @@
 | Layer | Technologies |
 |---|---|
 | **Front-End** | React 18 (Vite), React Router 6, Axios, Leaflet, React-Leaflet, Leaflet.markercluster |
-| **Back-End** | Node.js 20, Express, mysql2 (promises), jsonwebtoken (JWT), bcrypt, express-validator, node-cron, cors |
+| **Back-End** | Node.js 20, Express, mysql2 (promises), jsonwebtoken (JWT), bcrypt, express-validator, multer, sharp, node-cron, cors |
 | **Database** | MySQL 8.0 with dedicated analytical views and read-only Power BI user |
 | **Analytics** | Power BI Desktop connected via MySQL Connector |
 | **Deployment** | Docker, Docker Compose (3 services: `db`, `backend`, `frontend`), Git |
-| **Testing** | Jest, Supertest (23 automated integration & boundary tests) |
+| **Testing** | Jest, Supertest (35 automated integration & boundary tests) |
 
 ---
 
@@ -126,7 +135,7 @@ The database is seeded with synthetic test data across 20 wards, 10 zones, and 2
 
 ## 6. Running Automated Tests
 
-The test suite validates authentication, cross-role security, input constraints, duplicate merging, SLA boundaries, and hand-calculated mathematical scores:
+The test suite validates authentication, cross-role security, input constraints, duplicate merging, SLA boundaries, hand-calculated mathematical scores, photo magic byte inspection, EXIF stripping, and threaded updates scoping:
 
 ```bash
 cd backend
@@ -135,21 +144,57 @@ npm test
 
 Expected output:
 ```
-PASS tests/auth.test.js
+PASS tests/photos_updates.test.js
 PASS tests/complaints.test.js
+PASS tests/auth.test.js
 PASS tests/rules_boundary.test.js
 
-Test Suites: 3 passed, 3 total
-Tests:       23 passed, 23 total
+Test Suites: 4 passed, 4 total
+Tests:       35 passed, 35 total
 Snapshots:   0 total
-Time:        ~3.5s
+Time:        ~8.2s
 ```
 
 Detailed test documentation is located in [`docs/test-cases.md`](docs/test-cases.md).
 
 ---
 
-## 7. Connecting Power BI Desktop
+## 7. End-to-End Demo Script (Photos & Verified Fix Walkthrough)
+
+To verify the end-to-end user journey including photo uploads, officer comments, resolution proof, and citizen verification:
+
+1. **Step 1: Citizen Files Complaint with Photo**
+   - Log in at `http://localhost:3000/login` with `citizen1@civictrack.test` / `Citizen@123`.
+   - Click **File New Complaint** (`/citizen/new`).
+   - Select Category: **Pothole**, Ward: **Ward 1 - Pratap Nagar**, Locality: `Mate Square, Main Road`.
+   - Add description: `Large pothole near the intersection causing traffic congestion.`
+   - Attach an image file (JPG, PNG, or WebP). Notice the interactive image thumbnail preview.
+   - Click the map in Nagpur to drop the pin and submit.
+   - The complaint is created in `Open` status with the photo tagged as `before`.
+
+2. **Step 2: Ward Officer Inspects & Communicates**
+   - Log out, and log in to the Officer Portal at `http://localhost:3000/officer/login` with `officer1@civictrack.test` / `Officer@123`.
+   - Navigate to **Priority Queue** (`/officer/queue`) and click on the newly filed complaint.
+   - Inspect the citizen's uploaded 'before' photo in the photo gallery (click to enlarge modal).
+   - Under the **Updates** section, post an internal note: `Field team dispatched to inspect road subsurface` (check the *Internal note* box). Notice the purple "INTERNAL" badge.
+   - Update status from `Open` to `In Progress`.
+
+3. **Step 3: Officer Marks Resolved with Required Proof Photo**
+   - With the complaint now `In Progress`, select **Mark Resolved (Pending Citizen Confirmation)**.
+   - The form displays the mandatory **Proof of Resolution ('After' Photo)** upload area.
+   - Select an image of the completed repair.
+   - Add an officer maintenance note: `Asphalt patch completed and surface leveled.`
+   - Click **Apply Status Update**. The complaint transitions to `Pending Confirmation`.
+
+4. **Step 4: Citizen Verification (Before & After Side-by-Side)**
+   - Log back in as `citizen1@civictrack.test` and open the complaint (`/citizen/complaints/:id`).
+   - Notice the prominent verification banner and the **Before & After Side-by-Side Comparison** gallery showing the citizen's original problem photo right next to the officer's completed repair photo.
+   - Citizen inspects both images and reads public officer updates (internal notes are completely hidden).
+   - Click **Confirm Fix**. The complaint transitions to `Closed & Verified` and is permanently recorded.
+
+---
+
+## 8. Connecting Power BI Desktop
 
 1. Open Power BI Desktop $\rightarrow$ **Get Data** $\rightarrow$ **MySQL Database**.
 2. Enter Server: `localhost:3306`, Database: `civictrack`.
@@ -159,7 +204,7 @@ Detailed test documentation is located in [`docs/test-cases.md`](docs/test-cases
 
 ---
 
-## 8. Repository Structure
+## 9. Repository Structure
 
 ```
 civictrack/
@@ -167,7 +212,7 @@ civictrack/
 ├── .env.example             # Template environment variables
 ├── README.md                # Project documentation
 ├── docs/
-│   ├── test-cases.md        # Comprehensive 23-scenario test results table
+│   ├── test-cases.md        # Comprehensive 35-scenario test results table
 │   ├── powerbi-setup.md     # 5-page Power BI construction guide
 │   └── ACKNOWLEDGEMENTS.md  # Attributions, disclosures, and acknowledgements
 ├── db/
@@ -179,16 +224,16 @@ civictrack/
 │   ├── scripts/seed.js      # Procedural 250+ synthetic complaints seed generator
 │   ├── src/
 │   │   ├── server.js        # Server bootstrap, seed check & cron startup
-│   │   ├── app.js           # Express app, middleware & route mounting
+│   │   ├── app.js           # Express app, middleware, /uploads static serve & route mounting
 │   │   ├── config/db.js     # MySQL2 connection pooling
-│   │   ├── middleware/      # auth.js, requireRole.js, validate.js, errorHandler.js
+│   │   ├── middleware/      # auth.js, requireRole.js, validate.js, upload.js, errorHandler.js
 │   │   ├── routes/          # auth.js, complaints.js, wards.js, categories.js, stats.js, map.js, public.js
-│   │   ├── services/        # complaintService.js, ruleEngine.js, scoreService.js
+│   │   ├── services/        # complaintService.js, photoService.js, ruleEngine.js, scoreService.js
 │   │   └── jobs/scheduler.js# node-cron recurring auto-close & SLA checks
-│   └── tests/               # auth.test.js, complaints.test.js, rules_boundary.test.js
+│   └── tests/               # auth.test.js, complaints.test.js, rules_boundary.test.js, photos_updates.test.js
 └── frontend/
     ├── Dockerfile           # Multi-stage production build (Vite + Nginx)
-    ├── nginx.conf           # Reverse proxy configuration (/api -> backend:5000)
+    ├── nginx.conf           # Reverse proxy configuration (/api -> backend:5000, /uploads)
     ├── package.json
     ├── vite.config.js
     ├── index.html
@@ -196,8 +241,8 @@ civictrack/
         ├── main.jsx, App.jsx, App.css
         ├── api/client.js    # Axios with JWT bearer interceptors
         ├── context/AuthContext.jsx
-        ├── components/      # Navbar, ProtectedRoute, StatusBadge, StatusTimeline,
-        │                    # MapPicker, ComplaintMap, ComplaintCard, Loader, EmptyState, ErrorBanner
+        ├── components/      # Navbar, ProtectedRoute, StatusBadge, StatusTimeline, PhotoGallery,
+        │                    # ComplaintUpdates, MapPicker, ComplaintMap, ComplaintCard, Loader, EmptyState, ErrorBanner
         ├── pages/
         │   ├── Landing.jsx  # Public landing with dual-portal buttons
         │   ├── PublicMap.jsx# Public map with rankings sidebar
@@ -208,8 +253,8 @@ civictrack/
 
 ---
 
-## 9. Limitations & Acknowledgements
+## 10. Limitations & Acknowledgements
 
 - **Approximate Ward Centroids**: NMC official GIS polygon boundary files are not publicly distributed; approximate ward centroids are used for distance calculations.
-- **Synthetic Data**: All complaint descriptions, citizen identities, and coordinates are simulated test data.
 - Full details and AI generation disclosures are available in [`docs/ACKNOWLEDGEMENTS.md`](docs/ACKNOWLEDGEMENTS.md).
+

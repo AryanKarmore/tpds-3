@@ -55,3 +55,4 @@ export function findNearestWard(lat, lng, wards = []) {
 
   return nearestWard;
 }
+

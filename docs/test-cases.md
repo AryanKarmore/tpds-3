@@ -6,11 +6,11 @@ This document details all test cases executed for the CivicTrack Nagpur platform
 
 ## 1. Test Execution Summary
 
-- **Total Test Suites**: 3 (`auth.test.js`, `complaints.test.js`, `rules_boundary.test.js`)
-- **Total Tests**: 23
-- **Passed**: 23
+- **Total Test Suites**: 4 (`auth.test.js`, `complaints.test.js`, `rules_boundary.test.js`, `photos_updates.test.js`)
+- **Total Tests**: 35
+- **Passed**: 35
 - **Failed**: 0
-- **Coverage**: Authentication, Cross-Portal Access Control, Nagpur Coordinate Validation, Status State Machine, Haversine Duplication Merging, SLA Boundary Overdue Checks, Citizen Confirmation Flow, Auto-Close Job, and Ward Performance Scoring.
+- **Coverage**: Authentication, Cross-Portal Access Control, Nagpur Coordinate Validation, Status State Machine, Haversine Duplication Merging, SLA Boundary Overdue Checks, Citizen Confirmation Flow, Auto-Close Job, Ward Performance Scoring, Photo Upload Signature Validation, EXIF Metadata Stripping, After-Photo Enforcement on Resolution, Updates Scoping and Privacy, and Closed Complaint Mutation Protection.
 
 ---
 
@@ -41,6 +41,18 @@ This document details all test cases executed for the CivicTrack Nagpur platform
 | **TC-21** | Boundary | Duplicate radius boundary: Second report at 100m (<150m) vs 220m (>150m) | 100m -> `merged = true`, parent affected count +1; 220m -> `merged = false`, new parent | Radius boundary enforced | **PASS** |
 | **TC-22** | Boundary | Duplicate time window: Report at 13 days (<14d) vs 15 days (>14d) | 13d -> `merged = true`; 15d -> `merged = false` | Window boundary enforced | **PASS** |
 | **TC-23** | Boundary | Ward with zero complaints queried for performance score | Returns `performance_score = null`, `score_display = "No data"` (NOT 100) | null / "No data" returned | **PASS** |
+| **TC-24** | Security / Input | Upload a .pdf file renamed to .jpg (fake extension) | HTTP 400: Magic byte signature check rejects non-image bytes | HTTP 400 Rejected | **PASS** |
+| **TC-25** | Security / Input | Upload a .exe binary file renamed to .png (fake extension) | HTTP 400: Magic byte signature check rejects MZ executable headers | HTTP 400 Rejected | **PASS** |
+| **TC-26** | Boundary | Photo file size: 5.0 MB accepted vs 5.1 MB rejected | 5.0 MB -> HTTP 201; 5.1 MB -> HTTP 400 File too large | Limit strictly enforced | **PASS** |
+| **TC-27** | Boundary | Photo count on complaint creation: 3 photos accepted vs 4th rejected | 3 photos -> HTTP 201 (stored as 'before'); 4 photos -> HTTP 400 Limit exceeded | Limit strictly enforced | **PASS** |
+| **TC-28** | Business Rule | Officer transitions `In Progress` -> `Pending Confirmation` without after photo | HTTP 400: An 'after' photo is strictly required before moving to Pending Confirmation | HTTP 400 Bad Request | **PASS** |
+| **TC-29** | Normal | Officer transitions with valid 'after' photo attached | HTTP 200: Photo saved to /uploads, record inserted into complaint_photos with type 'after' | HTTP 200 Status Updated | **PASS** |
+| **TC-30** | Security / Privacy | Photo containing embedded EXIF metadata uploaded and saved | EXIF metadata stripped via `sharp`, file verified clean on disk | EXIF stripped | **PASS** |
+| **TC-31** | Boundary | Update message length: empty (rejected), 500 chars (accepted), 501 chars (rejected) | Empty -> HTTP 400; 500 chars -> HTTP 201; 501 chars -> HTTP 400 | Exact boundary adhered to | **PASS** |
+| **TC-32** | Security / Access | Citizen attempts to post an update on another citizen's complaint | HTTP 403 Forbidden: Citizens can only post updates on their own complaints | HTTP 403 Forbidden | **PASS** |
+| **TC-33** | Security / Access | Officer attempts to post update on complaint outside their assigned ward | HTTP 403 Forbidden: Officers can only post updates within their assigned ward | HTTP 403 Forbidden | **PASS** |
+| **TC-34** | Privacy | Officer posts internal note (`is_internal = true`); citizen fetches updates | Citizen response excludes internal note; officer response includes internal note | Note strictly isolated | **PASS** |
+| **TC-35** | Business Rule | User attempts to post an update on a `Closed` complaint | HTTP 400: Updates cannot be added to closed complaints | HTTP 400 Bad Request | **PASS** |
 
 ---
 
@@ -75,3 +87,4 @@ Clamped to $[0, 100]$.
   - Reopen penalty: $40 \times 0 = 0.0000$
   - Hand Score = $100 - 5.1428 - 2.3070 = 92.55$
 - **API Returned Score**: **92.55**. **Match Confirmed**.
+

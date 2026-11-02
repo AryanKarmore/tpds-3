@@ -1,4 +1,5 @@
 const request = require('supertest');
+const sharp = require('sharp');
 const app = require('../src/app');
 const pool = require('../src/config/db');
 
@@ -9,8 +10,13 @@ describe('Complaints Workflow & Enforcement', () => {
   let officerWard2Token;
   let citizenId;
   let otherCitizenId;
+  let dummyAfterPhoto;
 
   beforeAll(async () => {
+    dummyAfterPhoto = await sharp({
+      create: { width: 10, height: 10, channels: 3, background: { r: 50, g: 150, b: 250 } }
+    }).jpeg().toBuffer();
+
     // Citizen 1
     const cit1 = await request(app).post('/api/auth/citizen/login').send({
       email: 'citizen1@civictrack.test',
@@ -147,14 +153,13 @@ describe('Complaints Workflow & Enforcement', () => {
     expect(inProgressRes.status).toBe(200);
     expect(inProgressRes.body.status).toBe('In Progress');
 
-    // 3. Officer Ward 1 moves to Pending Confirmation (Mark Resolved)
+    // 3. Officer Ward 1 moves to Pending Confirmation (Mark Resolved with required after-photo)
     const resolveRes = await request(app)
       .patch(`/api/complaints/${complaintId}/status`)
       .set('Authorization', `Bearer ${officerWard1Token}`)
-      .send({
-        status: 'Pending Confirmation',
-        note: 'Bitumen patch work finished'
-      });
+      .field('status', 'Pending Confirmation')
+      .field('note', 'Bitumen patch work finished')
+      .attach('photo', dummyAfterPhoto, 'after_patch.jpg');
 
     expect(resolveRes.status).toBe(200);
     expect(resolveRes.body.status).toBe('Pending Confirmation');
@@ -209,7 +214,8 @@ describe('Complaints Workflow & Enforcement', () => {
     await request(app)
       .patch(`/api/complaints/${complaintId}/status`)
       .set('Authorization', `Bearer ${officerWard1Token}`)
-      .send({ status: 'Pending Confirmation' });
+      .field('status', 'Pending Confirmation')
+      .attach('photo', dummyAfterPhoto, 'resolved.jpg');
 
     // Boundary: Reject with reason < 10 chars (invalid)
     const shortReject = await request(app)
@@ -281,3 +287,4 @@ describe('Complaints Workflow & Enforcement', () => {
     expect(crossWardRes.body.error).toMatch(/assigned ward/i);
   });
 });
+

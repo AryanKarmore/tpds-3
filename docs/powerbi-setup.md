@@ -120,3 +120,4 @@ The database provides five denormalized, pre-aggregated views defined in `db/vie
   - Top 10 worst localities ranked by `total_affected` citizens and `complaint_count`.
 - **Reopen Rate Breakdown**:
   - Table identifying repeat failure points where citizens rejected the officer's initial fix.
+

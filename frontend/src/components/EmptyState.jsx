@@ -17,3 +17,4 @@ export default function EmptyState({ icon = '📭', title = 'No records found', 
     </div>
   );
 }
+

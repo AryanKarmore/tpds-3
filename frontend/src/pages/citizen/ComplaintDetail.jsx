@@ -5,6 +5,8 @@ import L from 'leaflet';
 import api from '../../api/client';
 import StatusBadge from '../../components/StatusBadge';
 import StatusTimeline from '../../components/StatusTimeline';
+import PhotoGallery from '../../components/PhotoGallery';
+import ComplaintUpdates from '../../components/ComplaintUpdates';
 import Loader from '../../components/Loader';
 import ErrorBanner from '../../components/ErrorBanner';
 
@@ -177,6 +179,13 @@ export default function ComplaintDetail() {
         </div>
       )}
 
+      {/* Citizen Verification Comparison: Before & After Side by Side */}
+      {isPendingConfirmation && complaint.photos && complaint.photos.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <PhotoGallery photos={complaint.photos} showSideBySide={true} />
+        </div>
+      )}
+
       {/* Main Grid: Details + Map */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: '24px', alignItems: 'start' }}>
         {/* Left Card: Details & Timeline */}
@@ -254,6 +263,16 @@ export default function ComplaintDetail() {
             </p>
           </div>
 
+          {/* Complaint Photos Gallery */}
+          {complaint.photos && complaint.photos.length > 0 && !isPendingConfirmation && (
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#334155', margin: '0 0 8px' }}>
+                📷 Attached Photos ({complaint.photos.length})
+              </h4>
+              <PhotoGallery photos={complaint.photos} />
+            </div>
+          )}
+
           {/* Merged Duplicate Reports (if any) */}
           {complaint.children && complaint.children.length > 0 && (
             <div style={{
@@ -277,11 +296,20 @@ export default function ComplaintDetail() {
           )}
 
           {/* Status Timeline */}
-          <div>
+          <div style={{ marginBottom: '28px' }}>
             <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#334155', margin: '0 0 12px' }}>
               Status History & Audit Trail
             </h4>
             <StatusTimeline history={complaint.history} />
+          </div>
+
+          {/* Updates (Comments) */}
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+            <ComplaintUpdates
+              complaintId={complaint.id}
+              isClosed={complaint.status === 'Closed'}
+              userRole="citizen"
+            />
           </div>
         </div>
 
@@ -409,3 +437,4 @@ export default function ComplaintDetail() {
     </div>
   );
 }
+

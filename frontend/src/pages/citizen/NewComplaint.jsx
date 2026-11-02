@@ -17,6 +17,7 @@ export default function NewComplaint() {
   const [description, setDescription] = useState('');
   const [latitude, setLatitude] = useState(null);
   const [longitude, setLongitude] = useState(null);
+  const [photos, setPhotos] = useState([]); // [{ id, file, preview }]
 
   // UI States
   const [submitting, setSubmitting] = useState(false);
@@ -25,6 +26,48 @@ export default function NewComplaint() {
   const [successInfo, setSuccessInfo] = useState(null);
 
   const navigate = useNavigate();
+
+  const handleFileChange = (e) => {
+    setError('');
+    const selectedFiles = Array.from(e.target.files || []);
+    if (!selectedFiles.length) return;
+
+    if (photos.length + selectedFiles.length > 3) {
+      setError('You can upload a maximum of 3 photos.');
+      return;
+    }
+
+    const validExtensions = ['image/jpeg', 'image/png', 'image/webp'];
+    const newPhotos = [];
+
+    for (const file of selectedFiles) {
+      if (!validExtensions.includes(file.type.toLowerCase())) {
+        setError(`"${file.name}" is not a valid format. Only JPG, PNG, and WebP are accepted.`);
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setError(`"${file.name}" exceeds the 5 MB file size limit.`);
+        return;
+      }
+      newPhotos.push({
+        id: Math.random().toString(36).substring(7),
+        file,
+        preview: URL.createObjectURL(file)
+      });
+    }
+
+    setPhotos((prev) => [...prev, ...newPhotos]);
+    e.target.value = '';
+  };
+
+  const removePhoto = (idToRemove) => {
+    setPhotos((prev) => {
+      const remaining = prev.filter((p) => p.id !== idToRemove);
+      const removed = prev.find((p) => p.id === idToRemove);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return remaining;
+    });
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -80,13 +123,20 @@ export default function NewComplaint() {
     setSubmitting(true);
 
     try {
-      const res = await api.post('/complaints', {
-        category_id: parseInt(categoryId, 10),
-        ward_id: parseInt(wardId, 10),
-        locality,
-        description,
-        latitude,
-        longitude
+      const formData = new FormData();
+      formData.append('category_id', String(categoryId));
+      formData.append('ward_id', String(wardId));
+      formData.append('locality', locality);
+      formData.append('description', description);
+      formData.append('latitude', String(latitude));
+      formData.append('longitude', String(longitude));
+
+      photos.forEach((p) => {
+        formData.append('photos', p.file);
+      });
+
+      const res = await api.post('/complaints', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       if (res.data.merged) {
@@ -328,6 +378,104 @@ export default function NewComplaint() {
               />
             </div>
 
+            {/* Photo Attachments (Optional, max 3) */}
+            <div style={{
+              padding: '16px',
+              backgroundColor: '#f8fafc',
+              borderRadius: '8px',
+              border: '1px dashed #cbd5e1'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>
+                  📷 Attach Problem Photos (Optional, up to 3)
+                </label>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  {photos.length} / 3 selected (Max 5 MB each, JPG/PNG/WebP)
+                </span>
+              </div>
+
+              {photos.length < 3 && (
+                <div style={{ marginBottom: photos.length > 0 ? '12px' : '0' }}>
+                  <input
+                    type="file"
+                    id="complaint-photos-input"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    onChange={handleFileChange}
+                    style={{ display: 'none' }}
+                  />
+                  <label
+                    htmlFor="complaint-photos-input"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 16px',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      color: '#334155',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span>📁</span> Choose Photo Files
+                  </label>
+                </div>
+              )}
+
+              {/* Photo Previews */}
+              {photos.length > 0 && (
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {photos.map((item) => (
+                    <div
+                      key={item.id}
+                      style={{
+                        position: 'relative',
+                        width: '90px',
+                        height: '90px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        border: '1px solid #cbd5e1'
+                      }}
+                    >
+                      <img
+                        src={item.preview}
+                        alt="preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(item.id)}
+                        style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '4px',
+                          width: '22px',
+                          height: '22px',
+                          borderRadius: '50%',
+                          backgroundColor: 'rgba(220, 38, 38, 0.9)',
+                          color: '#ffffff',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          lineHeight: 1
+                        }}
+                        title="Remove photo"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Submit Button */}
             <button
               type="submit"
@@ -354,3 +502,4 @@ export default function NewComplaint() {
     </div>
   );
 }
+

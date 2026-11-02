@@ -70,3 +70,4 @@ export default function ComplaintCard({ complaint, linkPrefix = '/citizen/compla
     </div>
   );
 }
+

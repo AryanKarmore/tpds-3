@@ -7,12 +7,13 @@ const {
   isOverdue,
   canTransition
 } = require('./ruleEngine');
+const { processAndSaveImage } = require('./photoService');
 
 class ComplaintService {
   /**
-   * File a complaint
+   * File a complaint with optional photos (up to 3, type 'before')
    */
-  async createComplaint(userId, { categoryId, wardId, locality, description, latitude, longitude }) {
+  async createComplaint(userId, { categoryId, wardId, locality, description, latitude, longitude }, files = []) {
     const lat = parseFloat(latitude);
     const lng = parseFloat(longitude);
 
@@ -21,6 +22,21 @@ class ComplaintService {
       const err = new Error('Location must be within Nagpur');
       err.statusCode = 400;
       throw err;
+    }
+
+    if (files && files.length > 3) {
+      const err = new Error('Maximum 3 photos allowed.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Process and validate files first before DB transaction
+    const savedPhotoPaths = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const filePath = await processAndSaveImage(file.buffer, file.mimetype);
+        savedPhotoPaths.push(filePath);
+      }
     }
 
     const conn = await pool.getConnection();
@@ -86,6 +102,15 @@ class ComplaintService {
 
         const newChildId = childRes.insertId;
 
+        // Save photos associated with new child report
+        for (const photoPath of savedPhotoPaths) {
+          await conn.query(
+            `INSERT INTO complaint_photos (complaint_id, uploaded_by, file_path, type)
+             VALUES (?, ?, ?, 'before')`,
+            [newChildId, userId, photoPath]
+          );
+        }
+
         // Increment parent's affected_count & recompute priority
         const newAffectedCount = matchedParent.affected_count + 1;
         const [parentDetails] = await conn.query('SELECT created_at FROM complaints WHERE id = ?', [matchedParent.id]);
@@ -139,6 +164,15 @@ class ComplaintService {
       );
 
       const complaintId = insertRes.insertId;
+
+      // Save photos associated with new parent complaint
+      for (const photoPath of savedPhotoPaths) {
+        await conn.query(
+          `INSERT INTO complaint_photos (complaint_id, uploaded_by, file_path, type)
+           VALUES (?, ?, ?, 'before')`,
+          [complaintId, userId, photoPath]
+        );
+      }
 
       await conn.query(
         `INSERT INTO status_history (complaint_id, old_status, new_status, changed_by, note)
@@ -248,20 +282,49 @@ class ComplaintService {
 
     const ageDays = Math.max(0, (Date.now() - new Date(complaint.created_at).getTime()) / (24 * 3600 * 1000));
 
+    // Fetch photos
+    const [photoRows] = await pool.query(
+      `SELECT cp.id, cp.complaint_id, cp.uploaded_by, cp.file_path, cp.type, cp.uploaded_at,
+              u.name AS uploader_name, u.role AS uploader_role
+       FROM complaint_photos cp
+       JOIN users u ON cp.uploaded_by = u.id
+       WHERE cp.complaint_id = ? OR cp.complaint_id IN (SELECT id FROM complaints WHERE parent_id = ?)
+       ORDER BY cp.uploaded_at ASC, cp.id ASC`,
+      [complaintId, complaintId]
+    );
+
+    // Fetch updates (citizens never receive internal ones)
+    let updatesQuery = `
+      SELECT cu.id, cu.complaint_id, cu.user_id, cu.message, cu.is_internal, cu.created_at,
+             u.name AS author_name, u.role AS author_role
+      FROM complaint_updates cu
+      JOIN users u ON cu.user_id = u.id
+      WHERE cu.complaint_id = ?
+    `;
+    const updatesParams = [complaintId];
+    if (currentUser.role === 'citizen') {
+      updatesQuery += ' AND cu.is_internal = FALSE';
+    }
+    updatesQuery += ' ORDER BY cu.created_at ASC, cu.id ASC';
+
+    const [updateRows] = await pool.query(updatesQuery, updatesParams);
+
     return {
       ...complaint,
       age_days: Math.round(ageDays * 10) / 10,
       latitude: parseFloat(complaint.latitude),
       longitude: parseFloat(complaint.longitude),
       history,
-      children
+      children,
+      photos: photoRows,
+      updates: updateRows
     };
   }
 
   /**
-   * Officer updates status
+   * Officer updates status (with mandatory after-photo when moving to Pending Confirmation)
    */
-  async updateStatusByOfficer(complaintId, officerUser, nextStatus, note = '') {
+  async updateStatusByOfficer(complaintId, officerUser, nextStatus, note = '', afterPhotoFile = null) {
     const [rows] = await pool.query('SELECT * FROM complaints WHERE id = ?', [complaintId]);
     if (rows.length === 0) {
       const err = new Error('Complaint not found');
@@ -286,6 +349,17 @@ class ComplaintService {
       throw err;
     }
 
+    // When marking resolved from In Progress to Pending Confirmation, exactly 1 after photo is required
+    let afterPhotoPath = null;
+    if (nextStatus === 'Pending Confirmation') {
+      if (!afterPhotoFile) {
+        const err = new Error("An 'after' photo is required when marking a complaint as resolved.");
+        err.statusCode = 400;
+        throw err;
+      }
+      afterPhotoPath = await processAndSaveImage(afterPhotoFile.buffer, afterPhotoFile.mimetype);
+    }
+
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -300,6 +374,14 @@ class ComplaintService {
         [nextStatus, resolvedAt, complaintId]
       );
 
+      if (afterPhotoPath) {
+        await conn.query(
+          `INSERT INTO complaint_photos (complaint_id, uploaded_by, file_path, type)
+           VALUES (?, ?, ?, 'after')`,
+          [complaintId, officerUser.id, afterPhotoPath]
+        );
+      }
+
       await conn.query(
         `INSERT INTO status_history (complaint_id, old_status, new_status, changed_by, note)
          VALUES (?, ?, ?, ?, ?)`,
@@ -307,13 +389,139 @@ class ComplaintService {
       );
 
       await conn.commit();
-      return { success: true, status: nextStatus, resolvedAt };
+      return { success: true, status: nextStatus, resolvedAt, afterPhoto: afterPhotoPath };
     } catch (err) {
       await conn.rollback();
       throw err;
     } finally {
       conn.release();
     }
+  }
+
+  /**
+   * Post an update / comment on a complaint
+   */
+  async addUpdate(complaintId, user, { message, is_internal = false }) {
+    const trimmed = (message || '').trim();
+    if (!trimmed || trimmed.length < 1) {
+      const err = new Error('Update message is required.');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (trimmed.length > 500) {
+      const err = new Error('Update message cannot exceed 500 characters.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const [rows] = await pool.query('SELECT * FROM complaints WHERE id = ?', [complaintId]);
+    if (rows.length === 0) {
+      const err = new Error('Complaint not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+    const complaint = rows[0];
+
+    // Updates not allowed on Closed complaints
+    if (complaint.status === 'Closed') {
+      const err = new Error('Updates are not allowed on closed complaints.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    let internalFlag = false;
+
+    if (user.role === 'citizen') {
+      // Citizen must own this complaint or a child of it
+      if (complaint.user_id !== user.id) {
+        const [children] = await pool.query(
+          'SELECT id FROM complaints WHERE parent_id = ? AND user_id = ?',
+          [complaint.id, user.id]
+        );
+        if (children.length === 0) {
+          const err = new Error('Forbidden: You can only post updates on your own complaints.');
+          err.statusCode = 403;
+          throw err;
+        }
+      }
+      // Citizen CANNOT set is_internal
+      internalFlag = false;
+    } else if (user.role === 'officer') {
+      if (!user.is_head && user.ward_id !== complaint.ward_id) {
+        const err = new Error('Forbidden: You can only post updates on complaints in your assigned ward.');
+        err.statusCode = 403;
+        throw err;
+      }
+      internalFlag = Boolean(is_internal);
+    }
+
+    const [res] = await pool.query(
+      `INSERT INTO complaint_updates (complaint_id, user_id, message, is_internal)
+       VALUES (?, ?, ?, ?)`,
+      [complaintId, user.id, trimmed, internalFlag ? 1 : 0]
+    );
+
+    return {
+      id: res.insertId,
+      complaint_id: complaintId,
+      user_id: user.id,
+      message: trimmed,
+      is_internal: internalFlag,
+      author_name: user.name,
+      author_role: user.role,
+      created_at: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Get updates / comments on a complaint
+   */
+  async getUpdates(complaintId, user) {
+    const [rows] = await pool.query('SELECT * FROM complaints WHERE id = ?', [complaintId]);
+    if (rows.length === 0) {
+      const err = new Error('Complaint not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+    const complaint = rows[0];
+
+    if (user.role === 'citizen') {
+      if (complaint.user_id !== user.id) {
+        const [children] = await pool.query(
+          'SELECT id FROM complaints WHERE parent_id = ? AND user_id = ?',
+          [complaint.id, user.id]
+        );
+        if (children.length === 0) {
+          const err = new Error('Forbidden: You do not have access to view these updates.');
+          err.statusCode = 403;
+          throw err;
+        }
+      }
+    } else if (user.role === 'officer') {
+      if (!user.is_head && user.ward_id !== complaint.ward_id) {
+        const err = new Error('Forbidden: You can only view updates for your assigned ward.');
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+
+    let query = `
+      SELECT cu.id, cu.complaint_id, cu.user_id, cu.message, cu.is_internal, cu.created_at,
+             u.name AS author_name, u.role AS author_role
+      FROM complaint_updates cu
+      JOIN users u ON cu.user_id = u.id
+      WHERE cu.complaint_id = ?
+    `;
+    const params = [complaintId];
+
+    if (user.role === 'citizen') {
+      query += ' AND cu.is_internal = FALSE';
+    }
+
+    query += ' ORDER BY cu.created_at ASC, cu.id ASC';
+
+    const [updates] = await pool.query(query, params);
+    return updates;
   }
 
   /**
@@ -582,7 +790,8 @@ class ComplaintService {
              c.affected_count, c.created_at,
              w.name AS ward_name,
              cat.name AS category_name,
-             ROUND(TIMESTAMPDIFF(SECOND, c.created_at, NOW()) / 86400.0, 1) AS age_in_days
+             ROUND(TIMESTAMPDIFF(SECOND, c.created_at, NOW()) / 86400.0, 1) AS age_in_days,
+             (SELECT file_path FROM complaint_photos WHERE (complaint_id = c.id OR complaint_id IN (SELECT id FROM complaints WHERE parent_id = c.id)) AND type = 'before' ORDER BY id ASC LIMIT 1) AS thumbnail_url
       FROM complaints c
       JOIN wards w ON c.ward_id = w.id
       JOIN categories cat ON c.category_id = cat.id
@@ -648,3 +857,4 @@ class ComplaintService {
 }
 
 module.exports = new ComplaintService();
+

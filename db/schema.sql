@@ -79,7 +79,30 @@ CREATE TABLE IF NOT EXISTS config (
   `value` VARCHAR(50) NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS complaint_photos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  complaint_id INT NOT NULL,
+  uploaded_by INT NOT NULL,
+  file_path VARCHAR(255) NOT NULL,
+  type ENUM('before','after') NOT NULL,
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (complaint_id) REFERENCES complaints(id) ON DELETE CASCADE,
+  FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS complaint_updates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  complaint_id INT NOT NULL,
+  user_id INT NOT NULL,
+  message VARCHAR(500) NOT NULL,
+  is_internal BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (complaint_id) REFERENCES complaints(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Read-only user for Power BI Desktop
 CREATE USER IF NOT EXISTS 'powerbi_ro'@'%' IDENTIFIED BY 'PowerBI@123';
 GRANT SELECT ON civictrack.* TO 'powerbi_ro'@'%';
 FLUSH PRIVILEGES;
+

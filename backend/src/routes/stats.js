@@ -16,3 +16,4 @@ router.get('/summary', authenticate, requireRole('officer'), async (req, res, ne
 });
 
 module.exports = router;
+

@@ -16,6 +16,11 @@ build/
 coverage/
 .nyc_output/
 
+# Uploads
+uploads/
+backend/uploads/*
+!backend/uploads/.gitkeep
+
 # Logs
 logs/
 *.log
@@ -25,3 +30,4 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+

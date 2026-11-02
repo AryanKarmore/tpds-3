@@ -44,6 +44,9 @@ describe('Business Rules & Boundary Verification', () => {
   });
 
   test('Boundary: Duplicate merging at 150m (merged) vs 151m (new parent)', async () => {
+    // Clear any active complaints in Ward 4 category 4 so this test has isolated parents
+    await pool.query('UPDATE complaints SET status = "Closed" WHERE ward_id = 4 AND category_id = 4');
+
     // 1. File base complaint in Ward 4
     const baseRes = await request(app)
       .post('/api/complaints')
@@ -99,6 +102,9 @@ describe('Business Rules & Boundary Verification', () => {
   });
 
   test('Boundary: Duplicate window - 14 days (merged) vs 15 days (not merged)', async () => {
+    // Clear any active complaints in Ward 5 & 6 category 1 for test isolation
+    await pool.query('UPDATE complaints SET status = "Closed" WHERE ward_id IN (5, 6) AND category_id = 1');
+
     // Create an old parent complaint created 14.5 days ago directly in DB
     const [cat] = await pool.query('SELECT * FROM categories WHERE id = 1');
     const [user] = await pool.query('SELECT id FROM users WHERE role = "citizen" LIMIT 1');

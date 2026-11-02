@@ -158,3 +158,4 @@ JOIN wards w ON c.ward_id = w.id
 JOIN zones z ON w.zone_id = z.id
 JOIN categories cat ON c.category_id = cat.id
 JOIN users u ON c.user_id = u.id;
+

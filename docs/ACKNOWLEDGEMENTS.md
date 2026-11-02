@@ -23,6 +23,8 @@ We gratefully acknowledge the developers and open-source communities behind the 
 - **bcrypt** (Kelektiv) - Cryptographic password hashing (10 salt rounds).
 - **jsonwebtoken (JWT)** (Auth0) - Stateless token-based session management.
 - **express-validator** (Gustavo Henke) - Request payload sanitization and validation middleware.
+- **multer** (Express.js Team) - Multipart/form-data upload handling middleware.
+- **sharp** (Lovell Fuller) - High-performance Node.js image processing library, utilized for automated EXIF metadata stripping and image sanitation.
 - **node-cron** (Lucas Motta) - In-process cron scheduler for background SLA checks.
 - **Jest & Supertest** (Meta Open Source, Visionmedia) - Automated unit and HTTP integration testing harness.
 
@@ -52,3 +54,4 @@ They were procedurally generated across a 4-month simulated operational timeline
 ## 4. AI Assistance Disclosure
 
 In compliance with academic integrity guidelines, **Claude Code** (Anthropic) was utilized as an AI pair programming and code-generation assistant to author the codebase, write unit and boundary tests, build Docker configurations, and generate documentation according to the detailed user build specifications. The project architecture, business rules, database schema, and test validations have been thoroughly reviewed, run, and verified by the development team.
+

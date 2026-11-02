@@ -15,3 +15,4 @@ export default function Loader({ message = 'Loading...' }) {
     </div>
   );
 }
+

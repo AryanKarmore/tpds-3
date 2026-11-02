@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const errorHandler = require('./middleware/errorHandler');
+const { UPLOADS_DIR } = require('./services/photoService');
 
 const authRoutes = require('./routes/auth');
 const wardsRoutes = require('./routes/wards');
@@ -15,6 +17,9 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve uploaded images statically
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Base API Routes
 app.use('/api/auth', authRoutes);
@@ -43,3 +48,4 @@ app.use('/api/*', (req, res) => {
 app.use(errorHandler);
 
 module.exports = app;
+
